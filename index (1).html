@@ -436,19 +436,20 @@ body{font-family:var(--sans);background:#000;color:var(--text);display:flex;flex
   <div class="auth-logo"><span class="auth-logo-dot"></span>HybridCoach</div>
   <div class="auth-card" id="auth-card-login">
     <div class="auth-title">Accedé a tu app</div>
-    <div class="auth-sub">Ingresá tu email y te enviamos un link de acceso. Sin contraseña.</div>
+    <div class="auth-sub">Ingresá tu email y te enviamos un código de 6 dígitos. Sin contraseña.</div>
     <div class="auth-label">Email</div>
     <input class="auth-input" id="auth-email" type="email" placeholder="tu@email.com" autocomplete="email" inputmode="email"/>
-    <button class="auth-btn" id="auth-submit-btn" onclick="sendMagicLink()">Continuar</button>
+    <button class="auth-btn" id="auth-submit-btn" onclick="sendOTP()">Continuar</button>
     <div class="auth-msg" id="auth-msg"></div>
   </div>
-  <div class="auth-card hidden" id="auth-card-sent">
-    <div class="auth-sent">
-      <div class="auth-sent-icon">📬</div>
-      <div class="auth-sent-title">Revisá tu email</div>
-      <div class="auth-sent-sub">Te enviamos un link de acceso. Tocalo desde el celular para ingresar a tu HybridCoach.</div>
-      <button class="auth-resend" onclick="showLoginCard()">Usar otro email</button>
-    </div>
+  <div class="auth-card hidden" id="auth-card-otp">
+    <div class="auth-title">Ingresá el código</div>
+    <div class="auth-sub" id="otp-sub">Te enviamos un código de 6 dígitos a tu email.</div>
+    <div class="auth-label">Código</div>
+    <input class="auth-input" id="auth-otp" type="text" placeholder="123456" inputmode="numeric" maxlength="6" autocomplete="one-time-code" style="font-size:22px;letter-spacing:8px;text-align:center;font-family:'DM Mono',monospace;"/>
+    <button class="auth-btn" id="auth-otp-btn" onclick="verifyOTP()">Ingresar</button>
+    <div class="auth-msg" id="auth-otp-msg"></div>
+    <button class="auth-resend" onclick="showLoginCard()">Usar otro email</button>
   </div>
 </div>
 
@@ -1598,13 +1599,20 @@ function renderChart(period){
 // ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://krdvxpohjnlzarstznnb.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_YuCKaj-70a-MnQK4ZCrvGQ_zy4m4a3R';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: {
+    flowType: 'implicit',
+    detectSessionInUrl: true,
+    persistSession: true,
+    autoRefreshToken: true,
+  }
+});
 
 let currentUser = null;
 let currentWeekNumber = 2;
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
-async function sendMagicLink(){
+async function sendOTP(){
   const email = document.getElementById('auth-email').value.trim();
   const btn = document.getElementById('auth-submit-btn');
   const msg = document.getElementById('auth-msg');
@@ -1618,7 +1626,7 @@ async function sendMagicLink(){
   msg.textContent = '';
   const { error } = await sb.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: window.location.href }
+    options: { shouldCreateUser: true }
   });
   btn.disabled = false;
   btn.textContent = 'Continuar';
@@ -1626,14 +1634,48 @@ async function sendMagicLink(){
     msg.textContent = error.message;
     msg.className = 'auth-msg error';
   } else {
+    document.getElementById('otp-sub').textContent = `Te enviamos un código de 6 dígitos a ${email}`;
     document.getElementById('auth-card-login').classList.add('hidden');
-    document.getElementById('auth-card-sent').classList.remove('hidden');
+    document.getElementById('auth-card-otp').classList.remove('hidden');
+    setTimeout(()=>{ document.getElementById('auth-otp')?.focus(); }, 200);
+  }
+}
+
+async function verifyOTP(){
+  const email = document.getElementById('auth-email').value.trim();
+  const token = document.getElementById('auth-otp').value.trim();
+  const btn = document.getElementById('auth-otp-btn');
+  const msg = document.getElementById('auth-otp-msg');
+  if(token.length < 6){
+    msg.textContent = 'Ingresá los 6 dígitos';
+    msg.className = 'auth-msg error';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Verificando...';
+  msg.textContent = '';
+  const { data, error } = await sb.auth.verifyOtp({
+    email,
+    token,
+    type: 'email'
+  });
+  btn.disabled = false;
+  btn.textContent = 'Ingresar';
+  if(error){
+    msg.textContent = 'Código incorrecto o expirado';
+    msg.className = 'auth-msg error';
+  } else if(data?.user){
+    document.getElementById('auth-overlay').classList.add('hidden');
+    document.getElementById('loading-screen').classList.remove('hidden');
+    await initApp(data.user);
   }
 }
 
 function showLoginCard(){
   document.getElementById('auth-card-login').classList.remove('hidden');
-  document.getElementById('auth-card-sent').classList.add('hidden');
+  document.getElementById('auth-card-otp')?.classList.add('hidden');
+  const sent = document.getElementById('auth-card-sent');
+  if(sent) sent.classList.add('hidden');
 }
 
 async function signOut(){
@@ -1780,94 +1822,91 @@ async function switchWeek(weekNum){
 // ─── INIT WITH SUPABASE ───────────────────────────────────────────────────────
 async function initApp(user){
   currentUser = user;
+
+  // 1. Esconder overlays inmediatamente
   document.getElementById('auth-overlay').classList.add('hidden');
-
-  // Show user chip in header
-  const hr = document.getElementById('header-right');
-  hr.innerHTML = `<span class="user-chip" onclick="if(confirm('Cerrar sesión?'))signOut()">${user.email}</span>`;
-
-  // Load profile
-  const profile = await loadProfileFromDB();
-  if(profile){
-    if(profile.current_week) currentWeekNumber = profile.current_week;
-  }
-
-  // Save S2 to DB if not exists
-  const existingWeek = await loadWeekFromDB(currentWeekNumber);
-  if(!existingWeek){
-    await saveWeekToDB(
-      currentWeekNumber,
-      WEEK,
-      'S2 · 5 – 11 may · Pre 21k',
-      '2026-05-05',
-      '2026-05-11'
-    );
-  }
-
-  // Load logs from DB into state
-  for(let di=0; di<WEEK.length; di++){
-    const d = WEEK[di];
-    for(let si=0; si<d.sessions.length; si++){
-      const log = await loadLogFromDB(currentWeekNumber, di, si);
-      if(log.completed){
-        Object.entries(log.completed).forEach(([ei, val])=>{
-          S.done[`${di}-${si}-${ei}`] = val;
-        });
-      }
-      if(log.sensations && Object.keys(log.sensations).length){
-        S.notes[`${di}-${si}`] = log.sensations;
-      }
-    }
-  }
-
-  // Get available weeks
-  const { data: weeksData } = await sb
-    .from('weeks')
-    .select('week_number')
-    .eq('user_id', user.id)
-    .order('week_number');
-  const availableWeeks = weeksData ? weeksData.map(w=>w.week_number) : [currentWeekNumber];
-  if(availableWeeks.length > 1) renderWeekSelector(availableWeeks);
-
-  // Update week badge
-  document.getElementById('week-badge-display').textContent = 'S2 · 5–11 may · Pre 21k';
-
   document.getElementById('loading-screen').classList.add('hidden');
+
+  // 2. Actualizar header con email del usuario
+  try {
+    const hr = document.getElementById('header-right');
+    if(hr) hr.innerHTML = `<span class="user-chip" onclick="if(confirm('Cerrar sesión?'))signOut()">${user.email.split('@')[0]}</span>`;
+  } catch(e){ console.log('header error', e); }
+
+  // 3. Actualizar week badge
+  try {
+    const wb = document.getElementById('week-badge-display');
+    if(wb) wb.textContent = 'S2 · 5–11 may';
+  } catch(e){ console.log('badge error', e); }
+
+  // 4. Renderizar la UI con datos locales primero
   renderStrip();
   renderDay();
   updateProgress();
   renderCoachBox();
+
+  // 5. Cargar datos de Supabase en background (sin bloquear la UI)
+  loadDataFromSupabase(user).catch(e => console.log('Supabase load error:', e));
+}
+
+async function loadDataFromSupabase(user){
+  try {
+    // Cargar logs del día actual
+    const di = S.day;
+    const d = WEEK[di];
+    if(!d || !d.sessions) return;
+
+    for(let si=0; si<d.sessions.length; si++){
+      const { data } = await sb
+        .from('daily_logs')
+        .select('completed, sensations')
+        .eq('user_id', user.id)
+        .eq('week_number', 2)
+        .eq('day_index', di)
+        .eq('session_index', si)
+        .maybeSingle();
+
+      if(data){
+        if(data.completed){
+          Object.entries(data.completed).forEach(([ei, val])=>{
+            S.done[`${di}-${si}-${ei}`] = val;
+          });
+        }
+        if(data.sensations && Object.keys(data.sensations).length){
+          S.notes[`${di}-${si}`] = data.sensations;
+        }
+      }
+    }
+
+    // Re-renderizar con datos actualizados
+    renderDay();
+    updateProgress();
+    saveState();
+
+  } catch(e){
+    console.log('loadDataFromSupabase error:', e);
+  }
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 // ─── BOOT ─────────────────────────────────────────────────────────────────────
 (async () => {
-  // Handle magic link callback
+  // Check for existing session first
   const { data: { session } } = await sb.auth.getSession();
 
   if(session?.user){
     await initApp(session.user);
-  } else {
-    // Check URL for token (magic link callback)
-    const hash = window.location.hash;
-    if(hash && hash.includes('access_token')){
-      const { data, error } = await sb.auth.getUser();
-      if(data?.user){
-        await initApp(data.user);
-        window.history.replaceState({}, '', window.location.pathname);
-        return;
-      }
-    }
-    // No session → show auth
-    document.getElementById('loading-screen').classList.add('hidden');
-    document.getElementById('auth-overlay').classList.remove('hidden');
-    // Still init UI for demo view
-    renderStrip();
-    renderDay();
-    updateProgress();
+    return;
   }
 
-  // Listen for auth changes
+  // No session → show auth
+  document.getElementById('loading-screen').classList.add('hidden');
+  document.getElementById('auth-overlay').classList.remove('hidden');
+  renderStrip();
+  renderDay();
+  updateProgress();
+
+  // Listen for auth state changes
   sb.auth.onAuthStateChange(async (event, session) => {
     if(event === 'SIGNED_IN' && session?.user && !currentUser){
       document.getElementById('auth-overlay').classList.add('hidden');
