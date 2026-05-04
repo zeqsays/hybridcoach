@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:;">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#080a0d">
@@ -423,7 +422,7 @@ body{font-family:var(--sans);background:#000;color:var(--text);display:flex;flex
 <body>
 
 <!-- LOADING -->
-<div class="loading-screen" id="loading-screen">
+<div class="loading-screen hidden" id="loading-screen">
   <div class="loading-logo">HybridCoach</div>
   <div class="loading-dots">
     <div class="loading-dot"></div>
@@ -433,7 +432,7 @@ body{font-family:var(--sans);background:#000;color:var(--text);display:flex;flex
 </div>
 
 <!-- AUTH OVERLAY -->
-<div class="auth-overlay" id="auth-overlay">
+<div class="auth-overlay hidden" id="auth-overlay">
   <div class="auth-logo"><span class="auth-logo-dot"></span>HybridCoach</div>
   <div class="auth-card" id="auth-card-login">
     <div class="auth-title">Accedé a tu app</div>
@@ -1823,82 +1822,87 @@ async function switchWeek(weekNum){
 // ─── INIT WITH SUPABASE ───────────────────────────────────────────────────────
 async function initApp(user){
   currentUser = user;
+
+  // 1. Esconder overlays inmediatamente
   document.getElementById('auth-overlay').classList.add('hidden');
-
-  // Show user chip in header
-  const hr = document.getElementById('header-right');
-  hr.innerHTML = `<span class="user-chip" onclick="if(confirm('Cerrar sesión?'))signOut()">${user.email}</span>`;
-
-  try {
-    // Load profile
-    const profile = await loadProfileFromDB();
-    if(profile && profile.current_week){
-      currentWeekNumber = profile.current_week;
-    }
-
-    // Save S2 to DB if not exists
-    const existingWeek = await loadWeekFromDB(currentWeekNumber);
-    if(!existingWeek){
-      await saveWeekToDB(
-        currentWeekNumber,
-        WEEK,
-        'S2 · 5 – 11 may · Pre 21k',
-        '2026-05-05',
-        '2026-05-11'
-      );
-    }
-
-    // Load logs from DB into state
-    for(let di=0; di<WEEK.length; di++){
-      const d = WEEK[di];
-      for(let si=0; si<(d.sessions||[]).length; si++){
-        try {
-          const log = await loadLogFromDB(currentWeekNumber, di, si);
-          if(log && log.completed){
-            Object.entries(log.completed).forEach(([ei, val])=>{
-              S.done[`${di}-${si}-${ei}`] = val;
-            });
-          }
-          if(log && log.sensations && Object.keys(log.sensations).length){
-            S.notes[`${di}-${si}`] = log.sensations;
-          }
-        } catch(e){ /* no log yet for this session, skip */ }
-      }
-    }
-
-    // Get available weeks for selector
-    const { data: weeksData } = await sb
-      .from('weeks')
-      .select('week_number')
-      .eq('user_id', user.id)
-      .order('week_number');
-    const availableWeeks = weeksData ? weeksData.map(w=>w.week_number) : [currentWeekNumber];
-    if(availableWeeks.length > 1) renderWeekSelector(availableWeeks);
-
-  } catch(e){
-    console.error('Error loading data:', e);
-    // Continue with local state if DB fails
-  }
-
-  // Update week badge
-  document.getElementById('week-badge-display').textContent = 'S2 · 5–11 may · Pre 21k';
-
   document.getElementById('loading-screen').classList.add('hidden');
+
+  // 2. Actualizar header con email del usuario
+  try {
+    const hr = document.getElementById('header-right');
+    if(hr) hr.innerHTML = `<span class="user-chip" onclick="if(confirm('Cerrar sesión?'))signOut()">${user.email.split('@')[0]}</span>`;
+  } catch(e){ console.log('header error', e); }
+
+  // 3. Actualizar week badge
+  try {
+    const wb = document.getElementById('week-badge-display');
+    if(wb) wb.textContent = 'S2 · 5–11 may';
+  } catch(e){ console.log('badge error', e); }
+
+  // 4. Renderizar la UI con datos locales primero
   renderStrip();
   renderDay();
   updateProgress();
   renderCoachBox();
+
+  // 5. Cargar datos de Supabase en background (sin bloquear la UI)
+  loadDataFromSupabase(user).catch(e => console.log('Supabase load error:', e));
+}
+
+async function loadDataFromSupabase(user){
+  try {
+    // Cargar logs del día actual
+    const di = S.day;
+    const d = WEEK[di];
+    if(!d || !d.sessions) return;
+
+    for(let si=0; si<d.sessions.length; si++){
+      const { data } = await sb
+        .from('daily_logs')
+        .select('completed, sensations')
+        .eq('user_id', user.id)
+        .eq('week_number', 2)
+        .eq('day_index', di)
+        .eq('session_index', si)
+        .maybeSingle();
+
+      if(data){
+        if(data.completed){
+          Object.entries(data.completed).forEach(([ei, val])=>{
+            S.done[`${di}-${si}-${ei}`] = val;
+          });
+        }
+        if(data.sensations && Object.keys(data.sensations).length){
+          S.notes[`${di}-${si}`] = data.sensations;
+        }
+      }
+    }
+
+    // Re-renderizar con datos actualizados
+    renderDay();
+    updateProgress();
+    saveState();
+
+  } catch(e){
+    console.log('loadDataFromSupabase error:', e);
+  }
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 // ─── BOOT ─────────────────────────────────────────────────────────────────────
 (async () => {
-  // Check for existing session first
-  const { data: { session } } = await sb.auth.getSession();
+  // Show loading briefly while checking session
+  document.getElementById('loading-screen').classList.remove('hidden');
 
-  if(session?.user){
-    await initApp(session.user);
-    return;
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+
+    if(session?.user){
+      await initApp(session.user);
+      return;
+    }
+  } catch(e){
+    console.log('Session check error:', e);
   }
 
   // No session → show auth
@@ -1908,11 +1912,10 @@ async function initApp(user){
   renderDay();
   updateProgress();
 
-  // Listen for auth state changes
+  // Listen for auth state changes (OTP verify triggers SIGNED_IN)
   sb.auth.onAuthStateChange(async (event, session) => {
     if(event === 'SIGNED_IN' && session?.user && !currentUser){
       document.getElementById('auth-overlay').classList.add('hidden');
-      document.getElementById('loading-screen').classList.remove('hidden');
       await initApp(session.user);
     }
     if(event === 'SIGNED_OUT'){
