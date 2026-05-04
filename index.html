@@ -1598,7 +1598,14 @@ function renderChart(period){
 // ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://krdvxpohjnlzarstznnb.supabase.co';
 const SUPABASE_ANON = 'sb_publishable_YuCKaj-70a-MnQK4ZCrvGQ_zy4m4a3R';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: {
+    flowType: 'implicit',
+    detectSessionInUrl: true,
+    persistSession: true,
+    autoRefreshToken: true,
+  }
+});
 
 let currentUser = null;
 let currentWeekNumber = 2;
@@ -1620,11 +1627,11 @@ async function sendMagicLink(){
     email,
     options: { emailRedirectTo: window.location.href }
   });
+  btn.disabled = false;
+  btn.textContent = 'Continuar';
   if(error){
     msg.textContent = error.message;
     msg.className = 'auth-msg error';
-    btn.disabled = false;
-    btn.textContent = 'Continuar';
   } else {
     document.getElementById('auth-card-login').classList.add('hidden');
     document.getElementById('auth-card-sent').classList.remove('hidden');
@@ -1786,48 +1793,56 @@ async function initApp(user){
   const hr = document.getElementById('header-right');
   hr.innerHTML = `<span class="user-chip" onclick="if(confirm('Cerrar sesión?'))signOut()">${user.email}</span>`;
 
-  // Load profile
-  const profile = await loadProfileFromDB();
-  if(profile){
-    if(profile.current_week) currentWeekNumber = profile.current_week;
-  }
+  try {
+    // Load profile
+    const profile = await loadProfileFromDB();
+    if(profile && profile.current_week){
+      currentWeekNumber = profile.current_week;
+    }
 
-  // Save S2 to DB if not exists
-  const existingWeek = await loadWeekFromDB(currentWeekNumber);
-  if(!existingWeek){
-    await saveWeekToDB(
-      currentWeekNumber,
-      WEEK,
-      'S2 · 5 – 11 may · Pre 21k',
-      '2026-05-05',
-      '2026-05-11'
-    );
-  }
+    // Save S2 to DB if not exists
+    const existingWeek = await loadWeekFromDB(currentWeekNumber);
+    if(!existingWeek){
+      await saveWeekToDB(
+        currentWeekNumber,
+        WEEK,
+        'S2 · 5 – 11 may · Pre 21k',
+        '2026-05-05',
+        '2026-05-11'
+      );
+    }
 
-  // Load logs from DB into state
-  for(let di=0; di<WEEK.length; di++){
-    const d = WEEK[di];
-    for(let si=0; si<d.sessions.length; si++){
-      const log = await loadLogFromDB(currentWeekNumber, di, si);
-      if(log.completed){
-        Object.entries(log.completed).forEach(([ei, val])=>{
-          S.done[`${di}-${si}-${ei}`] = val;
-        });
-      }
-      if(log.sensations && Object.keys(log.sensations).length){
-        S.notes[`${di}-${si}`] = log.sensations;
+    // Load logs from DB into state
+    for(let di=0; di<WEEK.length; di++){
+      const d = WEEK[di];
+      for(let si=0; si<(d.sessions||[]).length; si++){
+        try {
+          const log = await loadLogFromDB(currentWeekNumber, di, si);
+          if(log && log.completed){
+            Object.entries(log.completed).forEach(([ei, val])=>{
+              S.done[`${di}-${si}-${ei}`] = val;
+            });
+          }
+          if(log && log.sensations && Object.keys(log.sensations).length){
+            S.notes[`${di}-${si}`] = log.sensations;
+          }
+        } catch(e){ /* no log yet for this session, skip */ }
       }
     }
-  }
 
-  // Get available weeks
-  const { data: weeksData } = await sb
-    .from('weeks')
-    .select('week_number')
-    .eq('user_id', user.id)
-    .order('week_number');
-  const availableWeeks = weeksData ? weeksData.map(w=>w.week_number) : [currentWeekNumber];
-  if(availableWeeks.length > 1) renderWeekSelector(availableWeeks);
+    // Get available weeks for selector
+    const { data: weeksData } = await sb
+      .from('weeks')
+      .select('week_number')
+      .eq('user_id', user.id)
+      .order('week_number');
+    const availableWeeks = weeksData ? weeksData.map(w=>w.week_number) : [currentWeekNumber];
+    if(availableWeeks.length > 1) renderWeekSelector(availableWeeks);
+
+  } catch(e){
+    console.error('Error loading data:', e);
+    // Continue with local state if DB fails
+  }
 
   // Update week badge
   document.getElementById('week-badge-display').textContent = 'S2 · 5–11 may · Pre 21k';
@@ -1842,43 +1857,40 @@ async function initApp(user){
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 // ─── BOOT ─────────────────────────────────────────────────────────────────────
 (async () => {
-  // Handle magic link callback
-  const { data: { session } } = await sb.auth.getSession();
+  // Supabase v2: onAuthStateChange fires automatically when magic link hash is present
+  // Set up listener FIRST before checking session
 
-  if(session?.user){
-    await initApp(session.user);
-  } else {
-    // Check URL for token (magic link callback)
-    const hash = window.location.hash;
-    if(hash && hash.includes('access_token')){
-      const { data, error } = await sb.auth.getUser();
-      if(data?.user){
-        await initApp(data.user);
-        window.history.replaceState({}, '', window.location.pathname);
-        return;
-      }
-    }
-    // No session → show auth
-    document.getElementById('loading-screen').classList.add('hidden');
-    document.getElementById('auth-overlay').classList.remove('hidden');
-    // Still init UI for demo view
-    renderStrip();
-    renderDay();
-    updateProgress();
-  }
-
-  // Listen for auth changes
   sb.auth.onAuthStateChange(async (event, session) => {
-    if(event === 'SIGNED_IN' && session?.user && !currentUser){
-      document.getElementById('auth-overlay').classList.add('hidden');
-      document.getElementById('loading-screen').classList.remove('hidden');
-      await initApp(session.user);
+    console.log('Auth event:', event, session?.user?.email);
+    if((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user){
+      if(!currentUser){
+        document.getElementById('auth-overlay').classList.add('hidden');
+        document.getElementById('loading-screen').classList.remove('hidden');
+        // Clean URL hash
+        if(window.location.hash) window.history.replaceState({}, '', window.location.pathname);
+        await initApp(session.user);
+      }
     }
     if(event === 'SIGNED_OUT'){
       currentUser = null;
       location.reload();
     }
   });
+
+  // Then check for existing session
+  const { data: { session } } = await sb.auth.getSession();
+
+  if(session?.user){
+    await initApp(session.user);
+    return;
+  }
+
+  // No session → show auth, hide loading
+  document.getElementById('loading-screen').classList.add('hidden');
+  document.getElementById('auth-overlay').classList.remove('hidden');
+  renderStrip();
+  renderDay();
+  updateProgress();
 })();
 </script>
 </body>
