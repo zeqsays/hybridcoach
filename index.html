@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:;">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#080a0d">
@@ -436,19 +437,20 @@ body{font-family:var(--sans);background:#000;color:var(--text);display:flex;flex
   <div class="auth-logo"><span class="auth-logo-dot"></span>HybridCoach</div>
   <div class="auth-card" id="auth-card-login">
     <div class="auth-title">Accedé a tu app</div>
-    <div class="auth-sub">Ingresá tu email y te enviamos un link de acceso. Sin contraseña.</div>
+    <div class="auth-sub">Ingresá tu email y te enviamos un código de 6 dígitos. Sin contraseña.</div>
     <div class="auth-label">Email</div>
     <input class="auth-input" id="auth-email" type="email" placeholder="tu@email.com" autocomplete="email" inputmode="email"/>
-    <button class="auth-btn" id="auth-submit-btn" onclick="sendMagicLink()">Continuar</button>
+    <button class="auth-btn" id="auth-submit-btn" onclick="sendOTP()">Continuar</button>
     <div class="auth-msg" id="auth-msg"></div>
   </div>
-  <div class="auth-card hidden" id="auth-card-sent">
-    <div class="auth-sent">
-      <div class="auth-sent-icon">📬</div>
-      <div class="auth-sent-title">Revisá tu email</div>
-      <div class="auth-sent-sub">Te enviamos un link de acceso. Tocalo desde el celular para ingresar a tu HybridCoach.</div>
-      <button class="auth-resend" onclick="showLoginCard()">Usar otro email</button>
-    </div>
+  <div class="auth-card hidden" id="auth-card-otp">
+    <div class="auth-title">Ingresá el código</div>
+    <div class="auth-sub" id="otp-sub">Te enviamos un código de 6 dígitos a tu email.</div>
+    <div class="auth-label">Código</div>
+    <input class="auth-input" id="auth-otp" type="text" placeholder="123456" inputmode="numeric" maxlength="6" autocomplete="one-time-code" style="font-size:22px;letter-spacing:8px;text-align:center;font-family:'DM Mono',monospace;"/>
+    <button class="auth-btn" id="auth-otp-btn" onclick="verifyOTP()">Ingresar</button>
+    <div class="auth-msg" id="auth-otp-msg"></div>
+    <button class="auth-resend" onclick="showLoginCard()">Usar otro email</button>
   </div>
 </div>
 
@@ -1611,7 +1613,7 @@ let currentUser = null;
 let currentWeekNumber = 2;
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
-async function sendMagicLink(){
+async function sendOTP(){
   const email = document.getElementById('auth-email').value.trim();
   const btn = document.getElementById('auth-submit-btn');
   const msg = document.getElementById('auth-msg');
@@ -1625,7 +1627,7 @@ async function sendMagicLink(){
   msg.textContent = '';
   const { error } = await sb.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: window.location.href }
+    options: { shouldCreateUser: true }
   });
   btn.disabled = false;
   btn.textContent = 'Continuar';
@@ -1633,14 +1635,48 @@ async function sendMagicLink(){
     msg.textContent = error.message;
     msg.className = 'auth-msg error';
   } else {
+    document.getElementById('otp-sub').textContent = `Te enviamos un código de 6 dígitos a ${email}`;
     document.getElementById('auth-card-login').classList.add('hidden');
-    document.getElementById('auth-card-sent').classList.remove('hidden');
+    document.getElementById('auth-card-otp').classList.remove('hidden');
+    setTimeout(()=>{ document.getElementById('auth-otp')?.focus(); }, 200);
+  }
+}
+
+async function verifyOTP(){
+  const email = document.getElementById('auth-email').value.trim();
+  const token = document.getElementById('auth-otp').value.trim();
+  const btn = document.getElementById('auth-otp-btn');
+  const msg = document.getElementById('auth-otp-msg');
+  if(token.length < 6){
+    msg.textContent = 'Ingresá los 6 dígitos';
+    msg.className = 'auth-msg error';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Verificando...';
+  msg.textContent = '';
+  const { data, error } = await sb.auth.verifyOtp({
+    email,
+    token,
+    type: 'email'
+  });
+  btn.disabled = false;
+  btn.textContent = 'Ingresar';
+  if(error){
+    msg.textContent = 'Código incorrecto o expirado';
+    msg.className = 'auth-msg error';
+  } else if(data?.user){
+    document.getElementById('auth-overlay').classList.add('hidden');
+    document.getElementById('loading-screen').classList.remove('hidden');
+    await initApp(data.user);
   }
 }
 
 function showLoginCard(){
   document.getElementById('auth-card-login').classList.remove('hidden');
-  document.getElementById('auth-card-sent').classList.add('hidden');
+  document.getElementById('auth-card-otp')?.classList.add('hidden');
+  const sent = document.getElementById('auth-card-sent');
+  if(sent) sent.classList.add('hidden');
 }
 
 async function signOut(){
@@ -1857,27 +1893,7 @@ async function initApp(user){
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 // ─── BOOT ─────────────────────────────────────────────────────────────────────
 (async () => {
-  // Supabase v2: onAuthStateChange fires automatically when magic link hash is present
-  // Set up listener FIRST before checking session
-
-  sb.auth.onAuthStateChange(async (event, session) => {
-    console.log('Auth event:', event, session?.user?.email);
-    if((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user){
-      if(!currentUser){
-        document.getElementById('auth-overlay').classList.add('hidden');
-        document.getElementById('loading-screen').classList.remove('hidden');
-        // Clean URL hash
-        if(window.location.hash) window.history.replaceState({}, '', window.location.pathname);
-        await initApp(session.user);
-      }
-    }
-    if(event === 'SIGNED_OUT'){
-      currentUser = null;
-      location.reload();
-    }
-  });
-
-  // Then check for existing session
+  // Check for existing session first
   const { data: { session } } = await sb.auth.getSession();
 
   if(session?.user){
@@ -1885,12 +1901,25 @@ async function initApp(user){
     return;
   }
 
-  // No session → show auth, hide loading
+  // No session → show auth
   document.getElementById('loading-screen').classList.add('hidden');
   document.getElementById('auth-overlay').classList.remove('hidden');
   renderStrip();
   renderDay();
   updateProgress();
+
+  // Listen for auth state changes
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if(event === 'SIGNED_IN' && session?.user && !currentUser){
+      document.getElementById('auth-overlay').classList.add('hidden');
+      document.getElementById('loading-screen').classList.remove('hidden');
+      await initApp(session.user);
+    }
+    if(event === 'SIGNED_OUT'){
+      currentUser = null;
+      location.reload();
+    }
+  });
 })();
 </script>
 </body>
