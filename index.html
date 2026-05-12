@@ -2142,22 +2142,33 @@ async function loadWeekAndRender(user, weekNum){
     console.log('weekRow:', weekRow, 'error:', error);
 
     if(weekRow?.week_data && Array.isArray(weekRow.week_data)){
-      // Reemplazar WEEK global con datos de Supabase
       WEEK.splice(0, WEEK.length, ...weekRow.week_data);
       currentWeekNumber = weekNum;
+
+      // Calcular día activo según fecha real del dispositivo
+      if(weekRow.date_start){
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const start = new Date(weekRow.date_start + 'T00:00:00');
+        const diffDays = Math.round((today - start) / 86400000);
+        if(diffDays >= 0 && diffDays <= 6){
+          S.day = diffDays; // 0=lun, 6=dom
+        } else if(diffDays < 0){
+          S.day = 0; // semana futura → mostrar lunes
+        } else {
+          S.day = 6; // semana pasada → mostrar domingo
+        }
+      }
 
       // Actualizar badge
       const wb = document.getElementById('week-badge-display');
       if(wb) wb.textContent = weekRow.label || `S${weekNum}`;
 
-      // Re-renderizar con nueva semana
-      S.day = (() => { const d=new Date().getDay(); return d===0?6:d-1; })();
       renderStrip();
       renderDay();
       updateProgress();
     }
 
-    // Cargar logs de la semana activa
     await loadDataFromSupabase(user, weekNum);
 
   } catch(e){
