@@ -567,10 +567,6 @@ body{font-family:var(--sans);background:#000;color:var(--text);display:flex;flex
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
       Crear Planificación
     </button>
-    <div class="storage-bar">
-      <svg viewBox="0 0 24 24"><path d="M12 22C6.48 22 2 17.52 2 12S6.48 2 12 2s10 4.48 10 10-4.48 10-10 10z"/><path d="M12 8v4l3 3"/></svg>
-      <span class="storage-bar-text">Datos guardados automáticamente en este dispositivo</span>
-    </div>
     <div id="day-content"></div>
     <div id="coach-box-wrap"></div>
   </div>
@@ -2105,37 +2101,73 @@ async function initApp(user){
     if(hr) hr.innerHTML = `<span class="user-chip" onclick="if(confirm('Cerrar sesión?'))signOut()">${user.email.split('@')[0]}</span>`;
   } catch(e){ console.log('header error', e); }
 
-  // 3. Actualizar week badge
-  try {
-    const wb = document.getElementById('week-badge-display');
-    if(wb) wb.textContent = 'S2 · 5–11 may';
-  } catch(e){ console.log('badge error', e); }
-
-  // 4. Renderizar la UI con datos locales primero
+  // 3. Renderizar UI con datos locales primero (WEEK hardcodeado como fallback)
   renderStrip();
   renderDay();
   updateProgress();
   renderCoachBox();
 
-  // 5. Verificar rol coach
+  // 4. Verificar rol coach + cargar perfil (current_week) en paralelo
   try {
     const { data: profile } = await sb
       .from('profiles')
-      .select('role')
+      .select('role, current_week')
       .eq('id', user.id)
       .single();
+
     if(profile?.role === 'coach' || profile?.role === 'admin'){
       await initCoachPanel();
     }
-  } catch(e){ console.log('role check error', e); }
 
-  // 6. Cargar datos de Supabase en background (sin bloquear la UI)
-  loadDataFromSupabase(user).catch(e => console.log('Supabase load error:', e));
+    // Cargar semana correcta desde Supabase
+    const weekNum = profile?.current_week || currentWeekNumber;
+    console.log('Profile current_week:', profile?.current_week, '→ loading week:', weekNum);
+    // Always load from Supabase regardless of local WEEK state
+    await loadWeekAndRender(user, weekNum);
+  } catch(e){
+    console.log('initApp error:', e);
+  }
 }
 
-async function loadDataFromSupabase(user){
+async function loadWeekAndRender(user, weekNum){
   try {
-    // Cargar logs del día actual
+    console.log('loadWeekAndRender: loading week', weekNum, 'for user', user.id);
+    const { data: weekRow, error } = await sb
+      .from('weeks')
+      .select('week_data, label, date_start, date_end')
+      .eq('user_id', user.id)
+      .eq('week_number', weekNum)
+      .maybeSingle();
+
+    console.log('weekRow:', weekRow, 'error:', error);
+
+    if(weekRow?.week_data && Array.isArray(weekRow.week_data)){
+      // Reemplazar WEEK global con datos de Supabase
+      WEEK.splice(0, WEEK.length, ...weekRow.week_data);
+      currentWeekNumber = weekNum;
+
+      // Actualizar badge
+      const wb = document.getElementById('week-badge-display');
+      if(wb) wb.textContent = weekRow.label || `S${weekNum}`;
+
+      // Re-renderizar con nueva semana
+      S.day = (() => { const d=new Date().getDay(); return d===0?6:d-1; })();
+      renderStrip();
+      renderDay();
+      updateProgress();
+    }
+
+    // Cargar logs de la semana activa
+    await loadDataFromSupabase(user, weekNum);
+
+  } catch(e){
+    console.log('loadWeekAndRender error:', e);
+  }
+}
+
+async function loadDataFromSupabase(user, weekNum){
+  weekNum = weekNum || currentWeekNumber;
+  try {
     const di = S.day;
     const d = WEEK[di];
     if(!d || !d.sessions) return;
@@ -2145,7 +2177,7 @@ async function loadDataFromSupabase(user){
         .from('daily_logs')
         .select('completed, sensations')
         .eq('user_id', user.id)
-        .eq('week_number', 2)
+        .eq('week_number', weekNum)
         .eq('day_index', di)
         .eq('session_index', si)
         .maybeSingle();
