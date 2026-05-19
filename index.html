@@ -261,7 +261,7 @@ body{font-family:var(--sans);background:#000;color:var(--text);display:flex;flex
 .notes-title{font-size:12px;font-weight:500;color:var(--text2);display:flex;align-items:center;gap:6px;}
 .notes-title svg{width:13px;height:13px;flex-shrink:0;}
 .notes-actions{display:flex;align-items:center;gap:7px;}
-.saved-badge{display:none;font-size:10px;font-family:var(--mono);color:var(--accent);background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.2);border-radius:5px;padding:3px 8px;}
+.saved-badge{display:none;font-size:11px;color:var(--accent);border-radius:5px;padding:2px 6px;white-space:nowrap;}
 .saved-badge.show{display:inline-block;}
 .notes-save-btn{font-size:11px;font-family:var(--mono);background:rgba(29,155,209,.15);color:var(--brand);border:1px solid rgba(29,155,209,.35);border-radius:6px;padding:5px 12px;cursor:pointer;transition:all .15s;}
 .notes-save-btn:active{transform:scale(.95);}
@@ -666,6 +666,12 @@ body{font-family:var(--sans);background:#000;color:var(--text);display:flex;flex
     </div>
 
     <!-- Inline chart -->
+    <div style="padding:0 12px 8px;">
+      <button onclick="addObjective()" style="width:100%;padding:10px;border-radius:8px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.25);color:#f87171;font-size:12px;font-family:'DM Mono',monospace;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .15s;">
+        <svg viewBox="0 0 16 16" fill="none" stroke="#f87171" stroke-width="1.8" stroke-linecap="round" width="14" height="14"><circle cx="8" cy="8" r="6"/><line x1="8" y1="5" x2="8" y2="11"/><line x1="5" y1="8" x2="11" y2="8"/></svg>
+        Agregar nuevo objetivo
+      </button>
+    </div>
     <div class="chart-wrap" id="chart-wrap" style="margin:0 12px 4px;"></div>
     <div class="chart-legend" id="chart-legend" style="padding:0 12px 14px;"></div>
 
@@ -1153,7 +1159,7 @@ function renderDay(){
           Sensaciones
         </span>
         <div class="notes-actions">
-          <span class="saved-badge${n._saved?' show':''}" id="badge-${nk}">Guardado en tu perfil ✓</span>
+          <span class="saved-badge${n._saved?' show':''}" id="badge-${nk}">✓ guardado</span>
           <button class="notes-save-btn" onclick="saveNotes(event,'${nk}')">Guardar</button>
         </div>
       </div>
@@ -1725,8 +1731,8 @@ const CHART_DATA = {
     desc:'Mayo 2026 — Pre 21k (S2) → Bloque carga (S3–S4)',
     weeks:[
       {label:'S1', tag:'Abr 28 – May 4',  run:"140'", bike:"135'", swim:"90'",  str:'5 ses.'},
-      {label:'S2', tag:'May 5 – May 11',   run:"120'", bike:"60'",  swim:"90'",  str:'4 ses.', current:true},
-      {label:'S3', tag:'May 12 – May 18',  run:null,   bike:null,   swim:null,   str:null},
+      {label:'S2', tag:'May 5 – May 11',   run:"120'", bike:"60'",  swim:"90'",  str:'4 ses.'},
+      {label:'S3', tag:'May 12 – May 18',  run:"80'", bike:null,   swim:null,   str:'3 ses.', current:true},
       {label:'S4', tag:'May 19 – May 25',  run:null,   bike:null,   swim:null,   str:null},
     ]
   },
@@ -2336,6 +2342,26 @@ async function generateMyPlan(){
     btn.disabled = false;
     btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Generar mi planilla`;
   }
+}
+
+// ─── ADD OBJECTIVE ───────────────────────────────────────────────────────────
+function addObjective(){
+  const label = prompt('Nombre del objetivo (ej: Ironman 70.3, Test RM, 21k):');
+  if(!label || !label.trim()) return;
+  const period = currentPeriod;
+  const d = CHART_DATA[period];
+  // Find next available slot or add to last week
+  const weeks = d.weeks;
+  const targetIdx = prompt(`¿En qué semana/mes? (1–${weeks.length}):`);
+  const idx = parseInt(targetIdx) - 1;
+  if(isNaN(idx) || idx < 0 || idx >= weeks.length) return;
+  weeks[idx].objective = true;
+  // Add to chart objectives
+  if(!d.objectives) d.objectives = [];
+  // Map week idx to chart label idx
+  d.objectives.push({idx: idx, label: label.trim()});
+  renderChart(period);
+  renderVolWeeks(period);
 }
 
 // ─── COACH PANEL ──────────────────────────────────────────────────────────────
