@@ -1738,9 +1738,9 @@ const CHART_DATA = {
   },
   quarterly:{
     labels:['Abr','May','Jun','Jul'],
-    load:  [45, 68, 82, 40],
-    objectives:[{idx:1,label:'Olímpico'},{idx:3,label:'Descarga'}],
-    desc:'Abr – Jul 2026 · Bloque base → específico',
+    load:  [45, 55, 75, 85],
+    objectives:[{idx:1,label:'21k'}],
+    desc:'Abr – Jul 2026 · Base → Específico → Peak Ironman 5051',
     weeks:[
       {label:'Abr S1–S4', tag:'Bloque base',       run:"140'", bike:"135'", swim:"90'",  str:'5 ses.'},
       {label:'May S1–S4', tag:'Pre 21k + carga',    run:"120'", bike:"60'",  swim:"90'",  str:'4 ses.', current:true},
@@ -1750,9 +1750,9 @@ const CHART_DATA = {
   },
   annual:{
     labels:['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct'],
-    load:  [30, 42, 55, 45, 68, 82, 40, 78, 90, 55],
-    objectives:[{idx:5,label:'Olímpico'},{idx:9,label:'70.3'}],
-    desc:'2026 · Periodización anual hasta Ironman 70.3',
+    load:  [30, 42, 55, 45, 55, 70, 80, 88, 92, 60],
+    objectives:[{idx:4,label:'21k'},{idx:9,label:'IRONMAN 5051'}],
+    desc:'2026 · Periodización anual → IRONMAN 5051 octubre',
     weeks:[
       {label:'Ene–Feb', tag:'Base aeróbica',        run:null, bike:null, swim:null, str:null},
       {label:'Mar–Abr', tag:'Retorno al volumen',   run:"140'", bike:"135'", swim:"90'", str:'5 ses.'},
@@ -1801,7 +1801,7 @@ function calcTodayPosition(period, n){
     },
     annual: {
       start: new Date('2026-01-01'),
-      end:   new Date('2026-10-31'),
+      end:   new Date('2026-10-26'), // IRONMAN 5051
     }
   };
 
