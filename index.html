@@ -1726,14 +1726,14 @@ function closeFundModal(e){
 const CHART_DATA = {
   monthly:{
     labels:['S1','S2','S3','S4'],
-    load:  [45, 38, 65, 72],
-    objectives:[{idx:1,label:'21k'},{idx:3,label:'Test RM'}],
-    desc:'Mayo 2026 — Pre 21k (S2) → Bloque carga (S3–S4)',
+    load:  [45, 38, 52, 30],
+    objectives:[{idx:2,label:'21k'}],
+    desc:'Mayo 2026 — Pre 21k (S3) → Descarga post evento (S4)',
     weeks:[
       {label:'S1', tag:'Abr 28 – May 4',  run:"140'", bike:"135'", swim:"90'",  str:'5 ses.'},
       {label:'S2', tag:'May 5 – May 11',   run:"120'", bike:"60'",  swim:"90'",  str:'4 ses.'},
-      {label:'S3', tag:'May 12 – May 18',  run:"80'", bike:null,   swim:null,   str:'3 ses.', current:true},
-      {label:'S4', tag:'May 19 – May 25',  run:null,   bike:null,   swim:null,   str:null},
+      {label:'S3', tag:'May 12 – May 18',  run:"80'", bike:null,   swim:null,   str:'3 ses.', objective:true},
+      {label:'S4', tag:'May 19 – May 25',  run:"30'", bike:"60'",  swim:null,   str:'4 ses.', current:true},
     ]
   },
   quarterly:{
