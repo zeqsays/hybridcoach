@@ -1782,6 +1782,41 @@ function closeChartModal(){
   document.getElementById('chart-modal-overlay').classList.add('hidden');
 }
 
+// ─── CALC TODAY POSITION IN CHART ────────────────────────────────────────────
+// Returns 0.0–1.0 representing where today falls in the period timeframe
+// Returns null if today is outside the period
+function calcTodayPosition(period, n){
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  // Define period start and end dates
+  const periodBounds = {
+    monthly: {
+      start: new Date('2026-04-28'), // S1 start
+      end:   new Date('2026-05-25'), // S4 end
+    },
+    quarterly: {
+      start: new Date('2026-04-01'),
+      end:   new Date('2026-07-31'),
+    },
+    annual: {
+      start: new Date('2026-01-01'),
+      end:   new Date('2026-10-31'),
+    }
+  };
+
+  const bounds = periodBounds[period];
+  if(!bounds) return null;
+
+  const totalMs = bounds.end - bounds.start;
+  const elapsedMs = today - bounds.start;
+
+  if(elapsedMs < 0) return 0; // before period start
+  if(elapsedMs > totalMs) return null; // after period end
+
+  return elapsedMs / totalMs;
+}
+
 function renderChart(period){
   const d = CHART_DATA[period];
   const W = document.getElementById('chart-wrap').clientWidth - 24;
@@ -1824,6 +1859,23 @@ function renderChart(period){
     xLabels += `<text x="${px(i)}" y="${PAD.t+cH+20}" text-anchor="middle" font-size="10" font-family="DM Mono,monospace" fill="#4a5568">${lbl}</text>`;
   });
 
+  // ── TODAY line — position based on real date vs period timeframe ──
+  let todayLine = '';
+  const todayPos = calcTodayPosition(period, n);
+  if(todayPos !== null && todayPos >= 0 && todayPos <= 1){
+    const tx = PAD.l + todayPos * cW;
+    // Dashed vertical line full height
+    todayLine = `
+      <line x1="${tx}" y1="${PAD.t}" x2="${tx}" y2="${PAD.t+cH}"
+        stroke="rgba(255,255,255,.25)" stroke-width="1.2"
+        stroke-dasharray="4,3"/>
+      <rect x="${tx-14}" y="${PAD.t+cH+5}" width="28" height="13" rx="3"
+        fill="rgba(255,255,255,.07)" stroke="rgba(255,255,255,.15)" stroke-width="1"/>
+      <text x="${tx}" y="${PAD.t+cH+15}" text-anchor="middle"
+        font-size="8" font-family="DM Mono,monospace"
+        fill="rgba(255,255,255,.4)" letter-spacing=".05em">HOY</text>`;
+  }
+
   // Objective markers (red dots with labels)
   let objMarkers = '';
   d.objectives.forEach(obj=>{
@@ -1854,6 +1906,7 @@ function renderChart(period){
     <path d="${areaD}" fill="url(#areaGrad)"/>
     <path d="${pathD}" fill="none" stroke="#1D9BD1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
     ${dots}
+    ${todayLine}
     ${objMarkers}
     ${xLabels}
     <text x="${PAD.l-6}" y="${PAD.t}" text-anchor="end" font-size="10" font-family="DM Mono,monospace" fill="#4a5568">${maxV}</text>
