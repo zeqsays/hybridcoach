@@ -1,0 +1,11 @@
+{
+  "name": "hybridcoach",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.3"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
