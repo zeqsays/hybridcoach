@@ -1407,7 +1407,6 @@ function parseCoachResponse(text){
 function renderCoachBox(){
   const wrap = document.getElementById('coach-box-wrap');
   if(!wrap) return;
-  const apiKey = getApiKey();
   const d = WEEK[S.day];
 
   let inner = '';
@@ -1498,8 +1497,6 @@ function handleSaveKey(){
 }
 
 async function runCoachAnalysis(force=false){
-  const apiKey = getApiKey();
-  if(!apiKey) return;
   const btn = document.getElementById('coach-btn');
   const inner = document.getElementById('coach-inner');
   if(!inner) return;
@@ -2441,7 +2438,7 @@ async function generateAthleteplan(){
     return;
   }
 
-  const apiKey = getCoachApiKey() || getApiKey();
+  const apiKey = ''; // handled server-side
   if(!apiKey){
     status.textContent = 'Configurá la API key de Anthropic en el box del coach';
     status.className = 'coach-gen-status err';
