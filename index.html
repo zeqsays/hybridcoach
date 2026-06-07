@@ -1440,10 +1440,10 @@ function renderCoachBox(){
           Coach AI
           <span style="font-size:9px;font-family:var(--mono);font-weight:500;color:#f59e0b;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);border-radius:4px;padding:2px 7px;letter-spacing:.06em;text-transform:uppercase;margin-left:2px;">Plus</span>
         </div>
-        ${apiKey ? `<button class="coach-analyze-btn" id="coach-btn" onclick="runCoachAnalysis()">
+        <button class="coach-analyze-btn" id="coach-btn" onclick="runCoachAnalysis()">
           <svg viewBox="0 0 12 12"><path d="M10 6A4 4 0 112 6"/><path d="M10 2v4h-4"/></svg>
           Analizar
-        </button>` : ''}
+        </button>
       </div>
       <div id="coach-inner">${inner}</div>
     </div>`;
