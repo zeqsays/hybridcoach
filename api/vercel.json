@@ -1,0 +1,19 @@
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": ""
+        }
+      ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/generate-week",
+      "schedule": "59 2 * * 1"
+    }
+  ]
+}
