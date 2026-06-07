@@ -1272,7 +1272,7 @@ function renderVolWeeks(period){
   const swimIco = `<svg viewBox="0 0 20 20" fill="none" stroke-linecap="round"><path d="M2 10c1.5-2 3.5-2 5 0s3.5 2 5 0 3.5-2 5 0" stroke="#22d3ee" stroke-width="1.6"/></svg>`;
   const strIco  = `<svg viewBox="0 0 20 20" fill="none" stroke-linecap="round"><rect x="1" y="8.5" width="3" height="3" rx="1" stroke="#f59e0b" stroke-width="1.5"/><rect x="16" y="8.5" width="3" height="3" rx="1" stroke="#f59e0b" stroke-width="1.5"/><line x1="7.5" y1="10" x2="12.5" y2="10" stroke="#f59e0b" stroke-width="1.8"/></svg>`;
 
-  container.innerHTML = d.weeks.map(w => {
+  container.innerHTML = [...d.weeks].reverse().map(w => {
     const hasData = w.run || w.bike || w.swim || w.str;
     const badgeClass = w.current ? 'vol-week-badge current' : 'vol-week-badge';
     const badgeText = w.current ? 'Semana actual' : w.objective ? 'Objetivo' : '';
@@ -1412,19 +1412,7 @@ function renderCoachBox(){
 
   let inner = '';
 
-  if(!apiKey){
-    inner = `
-      <div class="coach-body">
-        <div class="apikey-setup">
-          <span class="apikey-label">Configurar API Key</span>
-          <div class="apikey-input-row">
-            <input class="apikey-input" id="apikey-inp" type="password" placeholder="sk-ant-api03-..." autocomplete="off" autocorrect="off" spellcheck="false"/>
-            <button class="apikey-save-btn" onclick="handleSaveKey()">Activar</button>
-          </div>
-          <span class="apikey-hint">Obtenela gratis en <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> → API Keys → Create Key. Se guarda solo en tu dispositivo.</span>
-        </div>
-      </div>`;
-  } else {
+  {
     const cache = getCoachCache();
     const cacheKey = `${S.day}-${JSON.stringify(S.notes)}-${JSON.stringify(S.done)}`.substring(0,200);
     const cached = cache[S.day];
@@ -1531,13 +1519,11 @@ async function runCoachAnalysis(force=false){
   inner.innerHTML = `<div class="coach-body"><div class="coach-loading"><div class="coach-dots"><div class="coach-dot"></div><div class="coach-dot"></div><div class="coach-dot"></div></div><span class="coach-loading-text">El coach está analizando tu día…</span></div></div>`;
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages',{
+    const res = await fetch('/api/chat',{
       method:'POST',
       headers:{
         'Content-Type':'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-direct-browser-access':'true'
+        'Content-Type':'application/json'
       },
       body: JSON.stringify({
         model:'claude-sonnet-4-20250514',
@@ -2310,11 +2296,7 @@ function closeOnboardingModal(e){
 }
 
 async function generateMyPlan(){
-  const apiKey = getApiKey();
-  if(!apiKey){
-    document.getElementById('ob-status').textContent = 'Primero configurá tu API key en el box Coach AI';
-    return;
-  }
+  // API key en servidor
 
   const fields = {
     objetivo:       document.getElementById('ob-objetivo')?.value.trim(),
@@ -2350,13 +2332,11 @@ async function generateMyPlan(){
 
     const prompt = buildOnboardingPrompt(currentUser?.email||'usuario', answers);
 
-    const res = await fetch('https://api.anthropic.com/v1/messages',{
+    const res = await fetch('/api/chat',{
       method:'POST',
       headers:{
         'Content-Type':'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-direct-browser-access':'true'
+        'Content-Type':'application/json'
       },
       body: JSON.stringify({
         model:'claude-sonnet-4-20250514',
@@ -2517,16 +2497,10 @@ async function generateAthleteplan(){
     status.textContent = 'Claude está creando la planilla personalizada...';
     const prompt = buildOnboardingPrompt(email, onboarding);
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch('/api/chat', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
         max_tokens: 4000,
         messages: [{ role: 'user', content: prompt }]
       })
