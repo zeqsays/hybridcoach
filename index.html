@@ -46,6 +46,17 @@
 .loading-dot:nth-child(2){animation-delay:.2s;}
 .loading-dot:nth-child(3){animation-delay:.4s;}
 
+/* ── WEEK HISTORY SELECTOR ── */
+.week-history-bar{display:flex;align-items:center;gap:6px;padding:10px 12px 0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.week-history-bar::-webkit-scrollbar{display:none;}
+.week-pill{flex-shrink:0;padding:5px 12px;border-radius:20px;font-size:10px;font-family:var(--mono);font-weight:600;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;transition:all .15s;white-space:nowrap;}
+.week-pill.active{background:rgba(29,155,209,.15);color:var(--brand);border-color:rgba(29,155,209,.4);}
+.week-pill.past{color:var(--text3);}
+.week-pill:active{transform:scale(.95);}
+.week-readonly-banner{margin:8px 12px 0;padding:7px 12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:8px;font-size:11px;font-family:var(--mono);color:var(--warn);display:flex;align-items:center;gap:7px;}
+.week-readonly-banner svg{width:12px;height:12px;stroke:var(--warn);fill:none;flex-shrink:0;}
+.week-readonly-banner.hidden{display:none;}
+
 /* ── CREATE PLAN BUTTON ── */
 .create-plan-btn{display:flex;align-items:center;justify-content:center;gap:8px;margin:12px 12px 0;padding:13px;border-radius:10px;background:rgba(29,155,209,.12);border:1px solid rgba(29,155,209,.3);color:var(--brand);font-size:13px;font-weight:600;font-family:var(--sans);cursor:pointer;transition:all .15s;width:calc(100% - 24px);}
 .create-plan-btn:active{transform:scale(.97);}
@@ -181,7 +192,10 @@ body{font-family:var(--sans);background:#000;color:var(--text);display:flex;flex
 .main-pad{padding-bottom:max(80px,calc(60px + env(safe-area-inset-bottom)));}
 
 /* ── WEEK STRIP ── */
-.week-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:12px 12px 0;}
+.week-strip{display:flex;flex-direction:row;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:10px 0 0;gap:0;}
+.week-strip::-webkit-scrollbar{display:none;}
+.week-group{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:0 12px;flex-shrink:0;width:100%;box-sizing:border-box;}
+.week-group-divider{width:1px;background:rgba(255,255,255,.08);flex-shrink:0;margin:8px 6px 0;}
 .day-dot{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;border-radius:8px;cursor:pointer;transition:background .15s;}
 .day-dot.active{background:var(--surface2);}
 .day-dot .d-label{font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;}
@@ -561,6 +575,11 @@ body{font-family:var(--sans);background:#000;color:var(--text);display:flex;flex
         <span class="progress-pct" id="pct-label">0%</span>
       </div>
       <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+    </div>
+
+    <div class="week-readonly-banner hidden" id="week-readonly-banner">
+      <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      Semana anterior · solo lectura
     </div>
 
     <!-- Botón crear planificación — siempre visible -->
@@ -1069,15 +1088,84 @@ function chipClass(field, val){
 
 // ─── RENDER STRIP ────────────────────────────────────────────────────────────
 function renderStrip(){
-  document.getElementById('week-strip').innerHTML = WEEK.map((d,i)=>{
-    const has = d.sessions.length>0;
-    const allDone = totalEx(i)>0 && doneEx(i)>=totalEx(i);
-    return `<div class="day-dot${i===S.day?' active':''}${has?' has-session':''}${allDone?' done-day':''}" onclick="selDay(${i})">
-      <span class="d-label">${d.day}</span>
-      <span class="d-num">${d.date}</span>
-      <span class="d-pip"></span>
-    </div>`;
-  }).join('');
+  const strip = document.getElementById('week-strip');
+  if(!strip) return;
+
+  // Build groups: each allUserWeeks entry becomes a week-group
+  // Current week is always shown; past weeks appended to the right via scroll
+  let html = '';
+
+  if(allUserWeeks.length > 1){
+    // Multi-week mode: show all weeks as scrollable groups
+    // Order: current week leftmost, older weeks to the right
+    const orderedWeeks = [...allUserWeeks].reverse(); // oldest→newest left→right... 
+    // Actually: newest first (current on left, scroll right for older)
+    const sortedWeeks = [...allUserWeeks]; // already sorted desc (newest first)
+
+    sortedWeeks.forEach((w, wi) => {
+      const isActiveWeek = w.week_number === currentWeekNumber;
+      // For active week use WEEK data; for others just show dates
+      const days = isActiveWeek ? WEEK : buildDaysFromWeek(w);
+
+      html += `<div class="week-group" id="wg-${w.week_number}">`;
+      days.forEach((d, di) => {
+        const globalKey = isActiveWeek ? di : -1;
+        const has = d.sessions && d.sessions.length > 0;
+        const isActiveDay = isActiveWeek && di === S.day;
+        const allDone = isActiveWeek && totalEx(di) > 0 && doneEx(di) >= totalEx(di);
+        html += `<div class="day-dot${isActiveDay?' active':''}${has?' has-session':''}${allDone?' done-day':''}"
+          onclick="selectWeekDay(${w.week_number}, ${di})">
+          <span class="d-label">${d.day}</span>
+          <span class="d-num">${d.date}</span>
+          <span class="d-pip"></span>
+        </div>`;
+      });
+      html += `</div>`;
+      // Divider between weeks
+      if(wi < sortedWeeks.length - 1) html += `<div class="week-group-divider"></div>`;
+    });
+  } else {
+    // Single week mode (original behavior)
+    html = `<div class="week-group">` + WEEK.map((d,i)=>{
+      const has = d.sessions && d.sessions.length>0;
+      const allDone = totalEx(i)>0 && doneEx(i)>=totalEx(i);
+      return `<div class="day-dot${i===S.day?' active':''}${has?' has-session':''}${allDone?' done-day':''}" onclick="selectWeekDay(${currentWeekNumber}, ${i})">
+        <span class="d-label">${d.day}</span>
+        <span class="d-num">${d.date}</span>
+        <span class="d-pip"></span>
+      </div>`;
+    }).join('') + `</div>`;
+  }
+
+  strip.innerHTML = html;
+
+  // Scroll active week group into view
+  setTimeout(()=>{
+    const activeGroup = document.getElementById(`wg-${currentWeekNumber}`);
+    if(activeGroup) activeGroup.scrollIntoView({ behavior:'smooth', block:'nearest', inline:'start' });
+  }, 100);
+}
+
+function buildDaysFromWeek(w){
+  // Build minimal day objects from week metadata for display in strip
+  const days = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  const start = new Date(w.date_start + 'T00:00:00');
+  return days.map((day, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return { day, date: d.getDate(), sessions: [] };
+  });
+}
+
+async function selectWeekDay(weekNum, dayIdx){
+  // If clicking a day in a different week, switch to that week first
+  if(weekNum !== currentWeekNumber){
+    await switchToWeek(weekNum);
+  }
+  S.day = dayIdx;
+  renderStrip();
+  renderDay();
+  renderCoachBox();
 }
 
 // ─── RENDER DAY ──────────────────────────────────────────────────────────────
@@ -1178,7 +1266,7 @@ function renderDay(){
 }
 
 // ─── INTERACTIONS ────────────────────────────────────────────────────────────
-function selDay(i){ S.day=i; renderStrip(); renderDay(); renderCoachBox(); }
+function selDay(i){ selectWeekDay(currentWeekNumber, i); }
 
 function toggleEx(key){
   S.done[key]=!S.done[key];
@@ -2186,6 +2274,7 @@ async function initApp(user){
     }
 
     const weekNum = activeWeek?.week_number || profile?.current_week || currentWeekNumber;
+    activeWeekNumber = weekNum;
     await loadWeekAndRender(user, weekNum);
   } catch(e){
     console.log('initApp error:', e);
@@ -2712,6 +2801,94 @@ async function changePlan(athleteId, currentPlan){
 function viewAthlete(athleteId){
   // TODO: expandir vista del atleta en próxima iteración
   alert('Vista detallada del atleta — próximamente');
+}
+
+// ─── WEEK HISTORY ────────────────────────────────────────────────────────────
+let allUserWeeks = []; // cached list of all weeks
+let activeWeekNumber = null; // currently displayed week
+
+async function loadWeekHistory(user){
+  const { data: weeks } = await sb
+    .from('weeks')
+    .select('week_number, label, date_start, date_end')
+    .eq('user_id', user.id)
+    .order('date_start', { ascending: false });
+
+  if(!weeks || weeks.length === 0) return;
+  allUserWeeks = weeks;
+  renderStrip(); // re-render strip with all weeks
+}
+
+function renderWeekHistoryBar(){ renderStrip(); }
+
+async function switchToWeek(weekNum){
+  if(!currentUser || weekNum === activeWeekNumber) return;
+
+  activeWeekNumber = weekNum;
+
+  // Load week data
+  const { data: weekRow } = await sb
+    .from('weeks')
+    .select('week_data, label, date_start, date_end')
+    .eq('user_id', currentUser.id)
+    .eq('week_number', weekNum)
+    .maybeSingle();
+
+  if(!weekRow?.week_data || !Array.isArray(weekRow.week_data)) return;
+
+  // Check if this is current week or past
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const start = new Date(weekRow.date_start + 'T00:00:00');
+  const end = new Date(weekRow.date_end + 'T00:00:00');
+  const isCurrent = today >= start && today <= end;
+
+  // Update WEEK data
+  WEEK.splice(0, WEEK.length, ...weekRow.week_data);
+  currentWeekNumber = weekNum;
+
+  // Set active day
+  if(isCurrent){
+    const diffDays = Math.round((today - start) / 86400000);
+    S.day = diffDays >= 0 && diffDays <= 6 ? diffDays : 0;
+  } else {
+    S.day = 0; // past week → show monday
+  }
+
+  // Load logs for this week
+  S.done = {};
+  S.notes = {};
+  const { data: logs } = await sb
+    .from('daily_logs')
+    .select('day_index, session_index, completed, sensations')
+    .eq('user_id', currentUser.id)
+    .eq('week_number', weekNum);
+
+  (logs || []).forEach(log => {
+    if(log.completed){
+      Object.entries(log.completed).forEach(([ei, val]) => {
+        S.done[`${log.day_index}-${log.session_index}-${ei}`] = val;
+      });
+    }
+    if(log.sensations && Object.keys(log.sensations).length){
+      S.notes[`${log.day_index}-${log.session_index}`] = log.sensations;
+    }
+  });
+
+  // Update badge
+  const wb = document.getElementById('week-badge-display');
+  if(wb) wb.textContent = weekRow.label;
+
+  // Show/hide readonly banner
+  const banner = document.getElementById('week-readonly-banner');
+  if(banner) banner.classList.toggle('hidden', isCurrent);
+
+  // Update history bar active state
+  renderWeekHistoryBar();
+
+  renderStrip();
+  renderDay();
+  updateProgress();
 }
 
 // ─── BOOT ─────────────────────────────────────────────────────────────────────
