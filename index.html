@@ -188,13 +188,13 @@ body{font-family:var(--sans);background:#000;color:var(--text);display:flex;flex
 .week-badge{font-size:11px;font-family:var(--mono);color:var(--text2);background:var(--surface2);border:1px solid var(--border);padding:4px 10px;border-radius:20px;}
 
 /* ── SCROLL ── */
-.scroll-area{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#080a0d;}
+.scroll-area{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#080a0d;touch-action:pan-y;}
 .main-pad{padding-bottom:max(80px,calc(60px + env(safe-area-inset-bottom)));}
 
 /* ── WEEK STRIP ── */
-.week-strip{display:flex;flex-direction:row;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:10px 0 0;gap:0;}
+.week-strip{display:flex;flex-direction:row;overflow-x:scroll;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:10px 0 0;gap:0;scroll-snap-type:x mandatory;touch-action:pan-x;}
 .week-strip::-webkit-scrollbar{display:none;}
-.week-group{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:0 12px;flex-shrink:0;min-width:100%;box-sizing:border-box;}
+.week-group{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:0 12px;flex-shrink:0;min-width:100%;box-sizing:border-box;scroll-snap-align:start;}
 .week-group-divider{width:1px;background:rgba(255,255,255,.08);flex-shrink:0;margin:8px 2px 0;align-self:stretch;}
 .day-dot{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;border-radius:8px;cursor:pointer;transition:background .15s;}
 .day-dot.active{background:var(--surface2);}
