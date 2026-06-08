@@ -194,8 +194,8 @@ body{font-family:var(--sans);background:#000;color:var(--text);display:flex;flex
 /* ── WEEK STRIP ── */
 .week-strip{display:flex;flex-direction:row;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:10px 0 0;gap:0;}
 .week-strip::-webkit-scrollbar{display:none;}
-.week-group{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:0 12px;flex-shrink:0;width:100%;box-sizing:border-box;}
-.week-group-divider{width:1px;background:rgba(255,255,255,.08);flex-shrink:0;margin:8px 6px 0;}
+.week-group{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:0 12px;flex-shrink:0;min-width:100%;box-sizing:border-box;}
+.week-group-divider{width:1px;background:rgba(255,255,255,.08);flex-shrink:0;margin:8px 2px 0;align-self:stretch;}
 .day-dot{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;border-radius:8px;cursor:pointer;transition:background .15s;}
 .day-dot.active{background:var(--surface2);}
 .day-dot .d-label{font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;}
