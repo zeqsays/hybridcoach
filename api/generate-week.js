@@ -144,7 +144,7 @@ async function generateNextWeekForUser(profile) {
   const { error: insertError } = await sb.from('weeks').insert({
     user_id: profile.id,
     week_number: nextWeek,
-    label: `S${nextWeek} · ${formatDate(nextDateStart).slice(5).replace('-', ' ')} – ${formatDate(nextDateEnd).slice(5).replace('-', ' ')}`,
+    label: `${formatDate(nextDateStart).slice(5).replace('-', ' ')} – ${formatDate(nextDateEnd).slice(5).replace('-', ' ')} ${nextDateStart.getFullYear()}`,
     date_start: formatDate(nextDateStart),
     date_end: formatDate(nextDateEnd),
     week_data: weekData,
@@ -152,10 +152,7 @@ async function generateNextWeekForUser(profile) {
 
   if (insertError) throw insertError;
 
-  // 9. Actualizar current_week del perfil
-  await sb.from('profiles')
-    .update({ current_week: nextWeek })
-    .eq('id', profile.id);
+  // 9. No actualizamos current_week — la app detecta semana activa por fecha
 
   return {
     status: 'generated',
