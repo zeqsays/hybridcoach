@@ -192,7 +192,7 @@ body{font-family:var(--sans);background:#000;color:var(--text);display:flex;flex
 .main-pad{padding-bottom:max(80px,calc(60px + env(safe-area-inset-bottom)));}
 
 /* ── WEEK STRIP ── */
-.week-strip-outer{background:#080a0d;border-bottom:1px solid #1a1e24;position:relative;user-select:none;}
+.week-strip-outer{background:#080a0d;border-bottom:1px solid #1a1e24;position:relative;user-select:none;-webkit-user-select:none;}
 .week-strip{display:flex;overflow-x:hidden;width:100%;}
 .week-strip-inner{display:flex;width:100%;transition:transform .28s cubic-bezier(.4,0,.2,1);}
 .week-group{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:10px 12px;flex-shrink:0;width:100%;box-sizing:border-box;}
@@ -201,7 +201,7 @@ body{font-family:var(--sans);background:#000;color:var(--text);display:flex;flex
 .week-strip-nav.prev{left:4px;}
 .week-strip-nav.next{right:4px;}
 .week-strip-nav.hidden{display:none!important;}
-@media(min-width:768px){.week-strip-nav{display:flex;}}
+@media(hover:hover){.week-strip-nav{display:flex !important;}}
 .day-dot{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 2px;border-radius:8px;cursor:pointer;transition:background .15s;}
 .day-dot.active{background:var(--surface2);}
 .day-dot .d-label{font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;}
@@ -568,17 +568,17 @@ body{font-family:var(--sans);background:#000;color:var(--text);display:flex;flex
     <div class="week-badge" id="week-badge-display">Cargando...</div>
   </div>
 </div>
+<div class="week-strip-outer" id="week-strip-outer">
+  <div class="week-strip-nav prev hidden" id="strip-prev" onclick="navigateWeek(-1)"><svg viewBox="0 0 10 10"><polyline points="7,1 3,5 7,9"/></svg></div>
+  <div class="week-strip" id="week-strip"><div class="week-strip-inner" id="week-strip-inner"></div></div>
+  <div class="week-strip-nav next hidden" id="strip-next" onclick="navigateWeek(1)"><svg viewBox="0 0 10 10"><polyline points="3,1 7,5 3,9"/></svg></div>
+</div>
 
 <div class="scroll-area">
 <div class="main-pad">
 
   <!-- HOY -->
   <div id="tab-today" class="tab-panel active">
-    <div class="week-strip-outer">
-      <div class="week-strip-nav prev hidden" id="strip-prev" onclick="navigateWeek(-1)"><svg viewBox="0 0 10 10"><polyline points="7,1 3,5 7,9"/></svg></div>
-      <div class="week-strip" id="week-strip"><div class="week-strip-inner" id="week-strip-inner"></div></div>
-      <div class="week-strip-nav next hidden" id="strip-next" onclick="navigateWeek(1)"><svg viewBox="0 0 10 10"><polyline points="3,1 7,5 3,9"/></svg></div>
-    </div>
     <div class="progress-wrap">
       <div class="progress-top">
         <span class="progress-label">Progreso semanal</span>
@@ -1360,6 +1360,8 @@ function updateProgress(){
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
 function switchTab(tab){
+  const outer = document.getElementById('week-strip-outer');
+  if(outer) outer.style.display = tab === 'today' ? '' : 'none';
   S.tab=tab;
   ['today','summary','plan','coach'].forEach(t=>{
     const el=document.getElementById('tab-'+t);
