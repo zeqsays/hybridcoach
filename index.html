@@ -2162,10 +2162,30 @@ async function initApp(user){
       await initCoachPanel();
     }
 
-    // Cargar semana correcta desde Supabase
-    const weekNum = profile?.current_week || currentWeekNumber;
-    console.log('Profile current_week:', profile?.current_week, '→ loading week:', weekNum);
-    // Always load from Supabase regardless of local WEEK state
+    // Encontrar semana activa por fecha del dispositivo
+    const today = new Date();
+    today.setHours(0,0,0,0);
+
+    // Cargar todas las semanas del usuario y encontrar la activa por fecha
+    const { data: allWeeks } = await sb
+      .from('weeks')
+      .select('week_number, date_start, date_end, label')
+      .eq('user_id', user.id)
+      .order('date_start', { ascending: false });
+
+    let activeWeek = null;
+    if(allWeeks && allWeeks.length > 0){
+      // Buscar la semana que contiene hoy
+      activeWeek = allWeeks.find(w => {
+        const start = new Date(w.date_start + 'T00:00:00');
+        const end = new Date(w.date_end + 'T00:00:00');
+        return today >= start && today <= end;
+      });
+      // Si no hay semana activa hoy, usar la más reciente
+      if(!activeWeek) activeWeek = allWeeks[0];
+    }
+
+    const weekNum = activeWeek?.week_number || profile?.current_week || currentWeekNumber;
     await loadWeekAndRender(user, weekNum);
   } catch(e){
     console.log('initApp error:', e);
@@ -2174,7 +2194,6 @@ async function initApp(user){
 
 async function loadWeekAndRender(user, weekNum){
   try {
-    console.log('loadWeekAndRender: loading week', weekNum, 'for user', user.id);
     const { data: weekRow, error } = await sb
       .from('weeks')
       .select('week_data, label, date_start, date_end')
@@ -2182,35 +2201,42 @@ async function loadWeekAndRender(user, weekNum){
       .eq('week_number', weekNum)
       .maybeSingle();
 
-    console.log('weekRow:', weekRow, 'error:', error);
+    if(!weekRow?.week_data || !Array.isArray(weekRow.week_data)) return;
 
-    if(weekRow?.week_data && Array.isArray(weekRow.week_data)){
-      WEEK.splice(0, WEEK.length, ...weekRow.week_data);
-      currentWeekNumber = weekNum;
-
-      // Calcular día activo según fecha real del dispositivo
-      if(weekRow.date_start){
-        const today = new Date();
-        today.setHours(0,0,0,0);
-        const start = new Date(weekRow.date_start + 'T00:00:00');
-        const diffDays = Math.round((today - start) / 86400000);
-        if(diffDays >= 0 && diffDays <= 6){
-          S.day = diffDays; // 0=lun, 6=dom
-        } else if(diffDays < 0){
-          S.day = 0; // semana futura → mostrar lunes
-        } else {
-          S.day = 6; // semana pasada → mostrar domingo
-        }
-      }
-
-      // Actualizar badge
-      const wb = document.getElementById('week-badge-display');
-      if(wb) wb.textContent = weekRow.label || `S${weekNum}`;
-
-      renderStrip();
-      renderDay();
-      updateProgress();
+    // Detectar si cambió la semana → resetear estado
+    const prevWeekStart = localStorage.getItem('hc_active_week_start');
+    if(prevWeekStart !== weekRow.date_start){
+      // Nueva semana — limpiar checkmarks y sensaciones
+      S.done = {};
+      S.notes = {};
+      // Borrar también el localStorage del estado anterior
+      try {
+        const keys = Object.keys(localStorage).filter(k => k.startsWith('hc_s'));
+        keys.forEach(k => localStorage.removeItem(k));
+      } catch(e){}
+      saveState();
+      localStorage.setItem('hc_active_week_start', weekRow.date_start);
     }
+
+    WEEK.splice(0, WEEK.length, ...weekRow.week_data);
+    currentWeekNumber = weekNum;
+
+    // Calcular día activo según fecha real del dispositivo vs date_start
+    if(weekRow.date_start){
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const start = new Date(weekRow.date_start + 'T00:00:00');
+      const diffDays = Math.round((today - start) / 86400000);
+      S.day = diffDays >= 0 && diffDays <= 6 ? diffDays : diffDays < 0 ? 0 : 6;
+    }
+
+    // Actualizar badge con fecha en lugar de número
+    const wb = document.getElementById('week-badge-display');
+    if(wb) wb.textContent = weekRow.label || weekRow.date_start;
+
+    renderStrip();
+    renderDay();
+    updateProgress();
 
     await loadDataFromSupabase(user, weekNum);
 
